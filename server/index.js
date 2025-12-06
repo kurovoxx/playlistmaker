@@ -21,7 +21,7 @@ app.post('/api/playlist', async (req, res) => {
   const { prompt, numSongs } = req.body;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     const fullPrompt = `Generate a list of ${numSongs} songs based on the following prompt: "${prompt}". Return only the song titles, separated by newlines.`;
     const result = await model.generateContent(fullPrompt);
     const generatedText = result.response.text();
