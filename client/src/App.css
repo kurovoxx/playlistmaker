@@ -54,3 +54,37 @@ button {
 button:hover {
   background-color: #1ed760;
 }
+
+button:disabled {
+  background-color: #535353;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #ff4d4d;
+  margin-top: 20px;
+}
+
+.playlist {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #333;
+}
+
+.playlist h2 {
+  margin-bottom: 15px;
+}
+
+.playlist a {
+  display: inline-block;
+  background-color: #1db954;
+  color: #ffffff;
+  padding: 10px 20px;
+  border-radius: 5px;
+  text-decoration: none;
+  font-size: 16px;
+}
+
+.playlist a:hover {
+  background-color: #1ed760;
+}
