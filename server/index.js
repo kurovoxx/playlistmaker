@@ -47,46 +47,63 @@ const keyUsageStats = YOUTUBE_API_KEYS.map((key, index) => ({
   lastUsed: null,
 }));
 
-// Función para obtener la siguiente API key disponible
+// Variable para mantener la instancia de YouTube
+let youtube;
+
+// Función para obtener la siguiente API key y re-crear el cliente
 function getNextYouTubeKey() {
-  // Intentar encontrar una key que no esté agotada
-  for (let i = 0; i < YOUTUBE_API_KEYS.length; i++) {
-    const index = (currentKeyIndex + i) % YOUTUBE_API_KEYS.length;
-    if (!keyUsageStats[index].quotaExhausted) {
-      currentKeyIndex = index;
-      keyUsageStats[index].requests++;
-      keyUsageStats[index].lastUsed = new Date();
-      return YOUTUBE_API_KEYS[index];
+    // Intentar encontrar una key que no esté agotada
+    for (let i = 0; i < YOUTUBE_API_KEYS.length; i++) {
+        const index = (currentKeyIndex + i) % YOUTUBE_API_KEYS.length;
+        if (!keyUsageStats[index].quotaExhausted) {
+            console.log(`✅ Usando API Key #${index + 1}`);
+            currentKeyIndex = index;
+            keyUsageStats[index].requests++;
+            keyUsageStats[index].lastUsed = new Date();
+
+            // Re-crear la instancia de youtube con la nueva key
+            youtube = google.youtube({
+                version: 'v3',
+                auth: YOUTUBE_API_KEYS[index],
+            });
+            return YOUTUBE_API_KEYS[index];
+        }
     }
-  }
-  
-  // Si todas están agotadas, resetear y usar la primera
-  console.warn('⚠️  Todas las API keys están agotadas, reseteando...');
-  keyUsageStats.forEach(stat => stat.quotaExhausted = false);
-  currentKeyIndex = 0;
-  keyUsageStats[0].requests++;
-  keyUsageStats[0].lastUsed = new Date();
-  return YOUTUBE_API_KEYS[0];
+
+    // Si todas están agotadas, resetear y usar la primera
+    console.warn('⚠️  Todas las API keys están agotadas, reseteando...');
+    keyUsageStats.forEach(stat => stat.quotaExhausted = false);
+    currentKeyIndex = 0;
+    keyUsageStats[0].requests++;
+    keyUsageStats[0].lastUsed = new Date();
+    
+    // Re-crear la instancia con la primera key
+    youtube = google.youtube({
+        version: 'v3',
+        auth: YOUTUBE_API_KEYS[0],
+    });
+    return YOUTUBE_API_KEYS[0];
 }
+
+// Inicializar el cliente por primera vez
+getNextYouTubeKey();
 
 // Función para marcar una key como agotada
-function markKeyAsExhausted(apiKey) {
-  const index = YOUTUBE_API_KEYS.indexOf(apiKey);
-  if (index !== -1) {
-    keyUsageStats[index].quotaExhausted = true;
-    keyUsageStats[index].errors++;
-    console.warn(`⚠️  API Key #${index + 1} agotada, rotando a la siguiente...`);
-    
-    // Mover al siguiente índice
-    currentKeyIndex = (index + 1) % YOUTUBE_API_KEYS.length;
-  }
-}
+function markKeyAsExhausted() {
+    const exhaustedKey = YOUTUBE_API_KEYS[currentKeyIndex];
+    const index = YOUTUBE_API_KEYS.indexOf(exhaustedKey);
 
-// Crear instancia de YouTube con la primera key
-let youtube = google.youtube({
-  version: 'v3',
-  auth: getNextYouTubeKey(),
-});
+    if (index !== -1 && !keyUsageStats[index].quotaExhausted) {
+        keyUsageStats[index].quotaExhausted = true;
+        keyUsageStats[index].errors++;
+        console.warn(`🔴 API Key #${index + 1} marcada como agotada.`);
+
+        // Rotar a la siguiente key
+        currentKeyIndex = (index + 1) % YOUTUBE_API_KEYS.length;
+        console.log(`🔄 Rotando a la API Key #${currentKeyIndex + 1}`);
+        getNextYouTubeKey(); // Llama para re-crear el cliente con la nueva key
+    }
+}
 
 // OpenAI API
 const openai = new OpenAI({
@@ -129,64 +146,58 @@ function uniquePreserveOrder(arr) {
 
 // Búsqueda en YouTube con rotación automática de API keys
 async function findYoutubeVideoId(q, retries = 0) {
-  const queries = [
-    q,
-    q.replace(/\s*-\s*/, ' '),
-    `${q} official audio`,
-    `${q} official video`,
-  ];
+    const queries = [
+        q,
+        q.replace(/\s*-\s*/, ' '),
+        `${q} official audio`,
+        `${q} official video`,
+    ];
 
-  for (const query of queries) {
-    try {
-      // Obtener la key actual
-      const currentKey = getNextYouTubeKey();
-      
-      // Recrear la instancia de YouTube con la key actual
-      youtube = google.youtube({
-        version: 'v3',
-        auth: currentKey,
-      });
+    for (const query of queries) {
+        try {
+            // Ya no es necesario obtener la key aquí, el cliente 'youtube' está centralizado
+            const resp = await youtube.search.list({
+                part: 'snippet',
+                q: query,
+                type: 'video',
+                maxResults: 1,
+                videoCategoryId: '10', // Categoría de música
+            });
 
-      const resp = await youtube.search.list({
-        part: 'snippet',
-        q: query,
-        type: 'video',
-        maxResults: 1,
-        videoCategoryId: '10', // Categoría de música
-      });
+            const item = resp?.data?.items?.[0];
+            if (item?.id?.videoId) {
+                return item.id.videoId;
+            }
+        } catch (e) {
+            // Detectar si es error de cuota agotada
+            if (e.message.includes('quotaExceeded') ||
+                e.message.includes('userRateLimitExceeded') ||
+                e.message.includes('rateLimitExceeded')) {
 
-      const item = resp?.data?.items?.[0];
-      if (item?.id?.videoId) {
-        return item.id.videoId;
-      }
-    } catch (e) {
-      // Detectar si es error de cuota agotada
-      if (e.message.includes('quotaExceeded') || 
-          e.message.includes('userRateLimitExceeded') ||
-          e.message.includes('rateLimitExceeded')) {
-        
-        console.warn(`⚠️  Cuota agotada para la key actual`);
-        markKeyAsExhausted(youtube.auth);
-        
-        // Reintentar con la siguiente key si hay más disponibles
-        if (retries < YOUTUBE_API_KEYS.length - 1) {
-          console.log(`🔄 Reintentando con otra API key...`);
-          return await findYoutubeVideoId(q, retries + 1);
-        } else {
-          console.error('❌ Todas las API keys de YouTube están agotadas');
-          return null;
+                markKeyAsExhausted(); // Marcar la key actual como agotada
+
+                // Reintentar con la siguiente key si hay más disponibles
+                if (retries < YOUTUBE_API_KEYS.length - 1) {
+                    console.log(`🔄 Reintentando con la nueva API key...`);
+                    return await findYoutubeVideoId(q, retries + 1);
+                } else {
+                    console.error('❌ Todas las API keys de YouTube están agotadas');
+                    return null;
+                }
+            }
+
+            if (e.message.includes('has not been used')) {
+                console.error('❌ YouTube Data API v3 no está habilitada para esta key');
+                markKeyAsExhausted(); // Marcar la key como agotada y rotar
+                if (retries < YOUTUBE_API_KEYS.length - 1) {
+                    return await findYoutubeVideoId(q, retries + 1);
+                }
+            }
+
+            console.warn(`⚠️  Error buscando "${query}":`, e.message);
         }
-      }
-      
-      if (e.message.includes('has not been used')) {
-        console.error('❌ YouTube Data API v3 no está habilitada');
-        throw e;
-      }
-      
-      console.warn(`⚠️  Error buscando "${query}":`, e.message);
     }
-  }
-  return null;
+    return null;
 }
 
 // Generar canciones con OpenAI
