@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
 const { google } = require('googleapis');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
 const app = express();
@@ -12,29 +12,19 @@ const youtube = google.youtube({
   auth: process.env.YOUTUBE_API_KEY,
 });
 
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 app.use(cors());
 app.use(express.json());
 
 app.post('/api/playlist', async (req, res) => {
   const { prompt, numSongs } = req.body;
 
-  const options = {
-    method: 'POST',
-    url: 'https://api.edenai.run/v2/text/generation',
-    headers: {
-      authorization: `Bearer ${process.env.EDENAI_API_KEY}`,
-    },
-    data: {
-      providers: 'openai',
-      text: `Generate a list of ${numSongs} songs based on the following prompt: "${prompt}". Return only the song titles, separated by newlines.`,
-      temperature: 0.2,
-      max_tokens: 250,
-    },
-  };
-
   try {
-    const response = await axios.request(options);
-    const generatedText = response.data.openai.generated_text;
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const fullPrompt = `Generate a list of ${numSongs} songs based on the following prompt: "${prompt}". Return only the song titles, separated by newlines.`;
+    const result = await model.generateContent(fullPrompt);
+    const generatedText = result.response.text();
     const songTitles = generatedText.split('\n').filter(title => title.trim() !== '');
 
     const videoIds = [];
