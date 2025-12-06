@@ -14,9 +14,14 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@googleapis/youtube": "^29.0.0",
+    "@huggingface/inference": "^4.13.4",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "openai": "^4.20.1",
     "googleapis": "^167.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   }
 }
