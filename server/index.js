@@ -169,10 +169,8 @@ async function findYoutubeVideoId(q, retries = 0) {
                 return item.id.videoId;
             }
         } catch (e) {
-            // Detectar si es error de cuota agotada
-            if (e.message.includes('quotaExceeded') ||
-                e.message.includes('userRateLimitExceeded') ||
-                e.message.includes('rateLimitExceeded')) {
+            // Detectar si es error de cuota agotada (de forma más robusta)
+            if (e.message && e.message.toLowerCase().includes('quota')) {
 
                 markKeyAsExhausted(); // Marcar la key actual como agotada
 
