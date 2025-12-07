@@ -2,7 +2,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { handlePlaylistRequest, cleanupOldUsageData, TOKEN_WINDOW_MS, readUsage, TOKEN_LIMIT } = require('./user_usage_manager');
+const { handlePlaylistRequest, TOKEN_WINDOW_MS, readUsage, TOKEN_LIMIT } = require('./user_usage_manager');
 const { loadYouTubeKeys, getNextYouTubeKey, markKeyAsExhausted, YOUTUBE_API_KEYS, currentKeyIndex, keyUsageStats } = require('./youtube_token_manager');
 
 const app = express();
@@ -79,17 +79,10 @@ app.get('/api/health', async (req, res) => {
 // Root endpoint
 app.get('/api/usage', async (req, res) => {
   const ip = req.ip;
-  const usage = await readUsage();
-  const userData = usage[ip];
-  const now = Date.now();
-
-  let count = 0;
-  if (userData && (now - userData.firstRequest < TOKEN_WINDOW_MS)) {
-    count = userData.count;
-  }
+  const userData = await readUsage(ip);
 
   res.json({
-    count,
+    count: userData.count,
     limit: TOKEN_LIMIT,
   });
 });
@@ -123,6 +116,3 @@ app.listen(port, () => {
   console.log(`   POST http://localhost:${port}/api/playlist`);
   console.log('\n');
 });
-
-// Run cleanup every 24 hours
-setInterval(cleanupOldUsageData, TOKEN_WINDOW_MS);
