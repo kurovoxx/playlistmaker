@@ -9,13 +9,6 @@ const openai = new OpenAI({
 // YouTube API
 let youtube;
 
-function initializeYoutube(auth) {
-  youtube = google.youtube({
-    version: 'v3',
-    auth,
-  });
-}
-
 // Parsear canciones del texto generado
 function parseSongLines(text) {
   return text
