@@ -24,7 +24,8 @@ function loadYouTubeKeys() {
     keys.push(process.env[`YOUTUBE_API_KEY${i}`]);
     i++;
   }
-  
+
+  console.log(`🔎 loadYouTubeKeys: cargadas ${keys.length} key(s).`);
   return keys;
 }
 
@@ -56,7 +57,6 @@ function getNextYouTubeKey() {
     for (let i = 0; i < YOUTUBE_API_KEYS.length; i++) {
         const index = (currentKeyIndex + i) % YOUTUBE_API_KEYS.length;
         if (!keyUsageStats[index].quotaExhausted) {
-            console.log(`✅ Usando API Key #${index + 1}`);
             currentKeyIndex = index;
             keyUsageStats[index].requests++;
             keyUsageStats[index].lastUsed = new Date();
@@ -66,6 +66,11 @@ function getNextYouTubeKey() {
                 version: 'v3',
                 auth: YOUTUBE_API_KEYS[index],
             });
+
+            // Logs de debugging
+            console.log(`✅ Seleccionada API Key #${index + 1} (api${index + 1})`);
+            console.log(`   -> api${index + 1} consumida. Tot requests: ${keyUsageStats[index].requests}`);
+            console.log(`   -> Último uso: ${keyUsageStats[index].lastUsed.toISOString()}`);
             return YOUTUBE_API_KEYS[index];
         }
     }
@@ -82,6 +87,8 @@ function getNextYouTubeKey() {
         version: 'v3',
         auth: YOUTUBE_API_KEYS[0],
     });
+
+    console.log('🔁 Reset completado. Usando API Key #1 (api1) tras reset.');
     return YOUTUBE_API_KEYS[0];
 }
 
@@ -96,12 +103,14 @@ function markKeyAsExhausted() {
     if (index !== -1 && !keyUsageStats[index].quotaExhausted) {
         keyUsageStats[index].quotaExhausted = true;
         keyUsageStats[index].errors++;
-        console.warn(`🔴 API Key #${index + 1} marcada como agotada.`);
+        console.warn(`🔴 API Key #${index + 1} marcada como agotada (api${index + 1}). Errors tot: ${keyUsageStats[index].errors}`);
 
         // Rotar a la siguiente key
         currentKeyIndex = (index + 1) % YOUTUBE_API_KEYS.length;
-        console.log(`🔄 Rotando a la API Key #${currentKeyIndex + 1}`);
+        console.log(`🔄 Rotando a la API Key #${currentKeyIndex + 1} (api${currentKeyIndex + 1})`);
         getNextYouTubeKey(); // Llama para re-crear el cliente con la nueva key
+    } else {
+        console.warn('⚠️ markKeyAsExhausted: no se encontró índice válido o ya estaba marcado.');
     }
 }
 
@@ -155,7 +164,9 @@ async function findYoutubeVideoId(q, retries = 0) {
 
     for (const query of queries) {
         try {
-            // Ya no es necesario obtener la key aquí, el cliente 'youtube' está centralizado
+            // Log: qué key (índice) estamos usando justo antes de la búsqueda
+            console.log(`🔑 Buscando con api${currentKeyIndex + 1}: "${query}" (reintento ${retries})`);
+
             const resp = await youtube.search.list({
                 part: 'snippet',
                 q: query,
@@ -166,19 +177,37 @@ async function findYoutubeVideoId(q, retries = 0) {
 
             const item = resp?.data?.items?.[0];
             if (item?.id?.videoId) {
+                console.log(`   ✓ Encontrado con api${currentKeyIndex + 1}: videoId=${item.id.videoId}`);
                 return item.id.videoId;
+            } else {
+                console.log(`   ✗ No hay resultados con api${currentKeyIndex + 1} para "${query}"`);
             }
-        } catch (e) {
-            // Detectar si es error de cuota agotada
-            if (e.message.includes('quotaExceeded') ||
-                e.message.includes('userRateLimitExceeded') ||
-                e.message.includes('rateLimitExceeded')) {
+                } catch (e) {
+            // Normalizar mensaje y obtener detalles estructurados
+            const msg = (e && (e.message || e.toString())) ? (e.message || String(e)) : String(e);
+            // Tratar de leer reason/errors desde la respuesta de Google (más fiable)
+            const googleReason = (
+              e?.errors?.[0]?.reason ||
+              e?.response?.data?.error?.errors?.[0]?.reason ||
+              e?.response?.data?.error?.message
+            ) || '';
 
+            console.warn(`   ⚠️ Error usando api${currentKeyIndex + 1} -> ${msg}`);
+            if (googleReason) console.warn(`      -> googleReason: ${googleReason}`);
+
+            // Detección robusta de 'quota exhausted' / rate limit:
+            const lowerMsg = (msg + ' ' + googleReason).toLowerCase();
+            const isQuota = /quota|quotaexceeded|userratelimitexceeded|ratelimitexceeded|dailyLimitExceeded/i.test(lowerMsg)
+                          || e?.response?.status === 403
+                          || googleReason.toLowerCase().includes('quota');
+
+            if (isQuota) {
+                console.warn(`   🔥 quota detectada para api${currentKeyIndex + 1} (rotando)...`);
                 markKeyAsExhausted(); // Marcar la key actual como agotada
 
                 // Reintentar con la siguiente key si hay más disponibles
                 if (retries < YOUTUBE_API_KEYS.length - 1) {
-                    console.log(`🔄 Reintentando con la nueva API key...`);
+                    console.log(`🔄 Reintentando con la nueva API key... (reintento ${retries + 1})`);
                     return await findYoutubeVideoId(q, retries + 1);
                 } else {
                     console.error('❌ Todas las API keys de YouTube están agotadas');
@@ -186,16 +215,19 @@ async function findYoutubeVideoId(q, retries = 0) {
                 }
             }
 
-            if (e.message.includes('has not been used')) {
+            // Error específico: Data API no habilitada para la key
+            if (lowerMsg.includes('has not been used') || lowerMsg.includes('not been used')) {
                 console.error('❌ YouTube Data API v3 no está habilitada para esta key');
-                markKeyAsExhausted(); // Marcar la key como agotada y rotar
+                markKeyAsExhausted();
                 if (retries < YOUTUBE_API_KEYS.length - 1) {
                     return await findYoutubeVideoId(q, retries + 1);
                 }
             }
 
-            console.warn(`⚠️  Error buscando "${query}":`, e.message);
+            // Otros errores: loguear y continuar con siguiente query del mismo key
+            console.warn(`⚠️  Error buscando "${query}":`, msg);
         }
+
     }
     return null;
 }
@@ -237,7 +269,7 @@ NO HAGAS ESTO (formato incorrecto):
 1. Queen - Bohemian Rhapsody
 * The Beatles - Hey Jude
 - Pink Floyd - Wish You Were Here
-"Nirvana - Smells Like Teen Spirit"`
+"Nirvana - Smells Like Teen Spirit"` 
         },
         {
           role: "user",
