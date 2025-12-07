@@ -1,9 +1,9 @@
 // server.js
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { handlePlaylistRequest, cleanupOldUsageData, TOKEN_WINDOW_MS, readUsage, TOKEN_LIMIT } = require('./user_usage_manager');
 const { loadYouTubeKeys, getNextYouTubeKey, markKeyAsExhausted, YOUTUBE_API_KEYS, currentKeyIndex, keyUsageStats } = require('./youtube_token_manager');
-require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 5000;
