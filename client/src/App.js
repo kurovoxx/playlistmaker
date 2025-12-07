@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
@@ -7,6 +7,23 @@ function App() {
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [usage, setUsage] = useState({ count: 0, limit: 50 });
+
+  const fetchUsage = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/usage');
+      if (response.ok) {
+        const data = await response.json();
+        setUsage(data);
+      }
+    } catch (err) {
+      console.error('Error fetching usage:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsage();
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -24,11 +41,16 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Something went wrong');
+        if (response.status === 429) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Límite de canciones excedido.');
+        }
+        throw new Error('Ocurrió un error inesperado.');
       }
 
       const data = await response.json();
       setPlaylistUrl(data.playlistUrl);
+      fetchUsage(); // Actualizar el uso
     } catch (error) {
       setError(error.message);
     } finally {
@@ -39,9 +61,20 @@ function App() {
   return (
     <div className="container">
       <h1>Music Playlist Generator</h1>
+
+      <div className="usage-container">
+        <p>Canciones generadas: {usage.count} / {usage.limit}</p>
+        <div className="progress-bar-container">
+          <div
+            className="progress-bar"
+            style={{ width: `${(usage.count / usage.limit) * 100}%` }}
+          ></div>
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit}>
         <div className="form-group">
-          <label htmlFor="prompt">Enter your music prompt:</label>
+          <label htmlFor="prompt">Ingresa tu prompt musical:</label>
           <input
             type="text"
             id="prompt"
