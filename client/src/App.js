@@ -103,9 +103,11 @@ function App() {
       {playlistUrl && (
         <div className="playlist">
           <h2>Your playlist is ready!</h2>
-          <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
-            Open Playlist
-          </a>
+          {playlistUrl && (
+            <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
+              Open Playlist
+            </a>
+          )}
         </div>
       )}
     </div>
