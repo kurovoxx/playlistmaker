@@ -43,14 +43,14 @@ function App() {
       if (!response.ok) {
         if (response.status === 429) {
           const errorData = await response.json();
-          throw new Error(errorData.message || 'Límite de canciones excedido.');
+          throw new Error(errorData.message || 'Song limit exceeded.');
         }
-        throw new Error('Ocurrió un error inesperado.');
+        throw new Error('An unexpected error occurred.');
       }
 
       const data = await response.json();
       setPlaylistUrl(data.playlistUrl);
-      fetchUsage(); // Actualizar el uso
+      fetchUsage();
     } catch (error) {
       setError(error.message);
     } finally {
@@ -59,57 +59,76 @@ function App() {
   };
 
   return (
-    <div className="container">
-      <h1>Music Playlist Generator</h1>
+    <div className="app-wrapper">
+      <div className="container">
+        <h1>Music Playlist Generator</h1>
+        <p className="subtitle">Create AI-powered personalized playlists</p>
 
-      <div className="usage-container">
-        <p>Canciones generadas: {usage.count} / {usage.limit}</p>
-        <div className="progress-bar-container">
-          <div
-            className="progress-bar"
-            style={{ width: `${(usage.count / usage.limit) * 100}%` }}
-          ></div>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="prompt">Music Prompt</label>
+            <div className="input-wrapper">
+              <input
+                type="text"
+                id="prompt"
+                placeholder="Describe your perfect playlist..."
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                required
+              />
+              <span className="input-icon">♪</span>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="num-songs">Number of Songs</label>
+            <input
+              type="number"
+              id="num-songs"
+              min="1"
+              max="50"
+              value={numSongs}
+              onChange={(e) => setNumSongs(e.target.value)}
+              required
+            />
+          </div>
+
+          <button type="submit" disabled={loading}>
+            {loading ? 'Generating...' : 'Generate Playlist'}
+          </button>
+        </form>
+
+        {error && <p className="error">{error}</p>}
+
+        {playlistUrl && (
+          <div className="playlist">
+            <h2>Your playlist is ready!</h2>
+            <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
+              Open on YouTube
+            </a>
+          </div>
+        )}
+
+        <div className="usage-container">
+          <p>
+            <span>Songs generated</span>
+            <span className="usage-badge">{usage.count} / {usage.limit}</span>
+          </p>
+          <div className="progress-bar-container">
+            <div
+              className="progress-bar"
+              style={{ width: `${(usage.count / usage.limit) * 100}%` }}
+            ></div>
+          </div>
+        </div>
+
+        <div className="footer">
+          <p>Powered by AI • Made with passion</p>
+          <p>
+            <a href="#">Privacy Policy</a> • <a href="#">Terms of Service</a>
+          </p>
         </div>
       </div>
-
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="prompt">Ingresa tu prompt musical:</label>
-          <input
-            type="text"
-            id="prompt"
-            name="prompt"
-            placeholder="e.g., Chilean rock without Los Prisioneros"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="num-songs">Number of songs:</label>
-          <input
-            type="number"
-            id="num-songs"
-            name="num-songs"
-            min="1"
-            value={numSongs}
-            onChange={(e) => setNumSongs(e.target.value)}
-          />
-        </div>
-        <button type="submit" disabled={loading}>
-          {loading ? 'Generating...' : 'Generate Playlist'}
-        </button>
-      </form>
-      {error && <p className="error">{error}</p>}
-      {playlistUrl && (
-        <div className="playlist">
-          <h2>Your playlist is ready!</h2>
-          {playlistUrl && (
-            <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
-              Open Playlist
-            </a>
-          )}
-        </div>
-      )}
     </div>
   );
 }
