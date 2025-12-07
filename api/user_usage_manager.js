@@ -1,26 +1,24 @@
-const fs = require('fs').promises;
-const path = require('path');
-const lockfile = require('proper-lockfile');
+const { createClient } = require('@vercel/kv');
 const { findYoutubeVideoId, generateWithOpenAI, getFallbackSongs, uniquePreserveOrder } = require('./api_calls');
 
 const TOKEN_LIMIT = 50;
 const TOKEN_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 horas
-const usageDbPath = path.join(__dirname, 'token_usage.json');
 
-async function readUsage() {
-  try {
-    const data = await fs.readFile(usageDbPath, 'utf8');
-    return JSON.parse(data);
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      return {}; // Si el archivo no existe, empezar con data vacía
-    }
-    throw err;
+const kv = createClient({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
+
+async function readUsage(ip) {
+  const userData = await kv.get(ip);
+  if (!userData) {
+    return { count: 0, firstRequest: 0 };
   }
-}
-
-async function writeUsage(data) {
-  await fs.writeFile(usageDbPath, JSON.stringify(data, null, 2));
+  const now = Date.now();
+  if (now - userData.firstRequest > TOKEN_WINDOW_MS) {
+    return { count: 0, firstRequest: 0 };
+  }
+  return userData;
 }
 
 async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouTubeKey, currentKeyIndex, YOUTUBE_API_KEYS }) {
@@ -28,22 +26,8 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
   const numSongs = Number(req.body.numSongs) || 10;
 
   try {
-    await lockfile.lock(usageDbPath);
-
-    let usage;
-    try {
-      const data = await fs.readFile(usageDbPath, 'utf8');
-      usage = JSON.parse(data);
-    } catch (err) {
-      if (err.code === 'ENOENT') {
-        usage = {};
-      } else {
-        throw err;
-      }
-    }
-
     const now = Date.now();
-    let userData = usage[ip];
+    let userData = await kv.get(ip);
 
     if (!userData || (now - userData.firstRequest > TOKEN_WINDOW_MS)) {
       userData = {
@@ -140,9 +124,8 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
     const playlistUrl = `https://www.youtube.com/watch_videos?video_ids=${videoIds.join(',')}`;
 
     userData.count += generated.length;
-    usage[ip] = userData;
 
-    await writeUsage(usage);
+    await kv.set(ip, userData);
     console.log(`📈 Tokens para ${ip}: ${userData.count}/${TOKEN_LIMIT}`);
 
     return res.json({
@@ -167,41 +150,11 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
       error: "Error al generar la playlist",
       details: err.message
     });
-  } finally {
-    await lockfile.unlock(usageDbPath);
   }
-}
-
-async function cleanupOldUsageData() {
-  await lockfile.lock(usageDbPath);
-  let usage;
-  try {
-    const data = await fs.readFile(usageDbPath, 'utf8');
-    usage = JSON.parse(data);
-  } catch (err) {
-    await lockfile.unlock(usageDbPath);
-    if (err.code === 'ENOENT') return; // No file to clean
-    throw err;
-  }
-
-  const now = Date.now();
-  let changed = false;
-  for (const ip in usage) {
-    if (now - usage[ip].firstRequest > TOKEN_WINDOW_MS) {
-      delete usage[ip];
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    await fs.writeFile(usageDbPath, JSON.stringify(usage, null, 2));
-  }
-  await lockfile.unlock(usageDbPath);
 }
 
 module.exports = {
   handlePlaylistRequest,
-  cleanupOldUsageData,
   TOKEN_WINDOW_MS,
   readUsage,
   TOKEN_LIMIT,
