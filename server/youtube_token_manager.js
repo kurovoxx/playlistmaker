@@ -97,6 +97,10 @@ function markKeyAsExhausted() {
     }
 }
 
+function getYoutubeClient() {
+  return youtube;
+}
+
 module.exports = {
   loadYouTubeKeys,
   getNextYouTubeKey,
@@ -104,4 +108,6 @@ module.exports = {
   YOUTUBE_API_KEYS,
   currentKeyIndex,
   keyUsageStats,
+  getYoutubeClient,
+  initializeYoutube,
 };

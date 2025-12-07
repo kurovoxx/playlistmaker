@@ -6,6 +6,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const { getYoutubeClient, initializeYoutube } = require('./youtube_token_manager');
+
 // YouTube API
 let youtube;
 
@@ -42,6 +44,7 @@ function uniquePreserveOrder(arr) {
 
 // Búsqueda en YouTube con rotación automática de API keys
 async function findYoutubeVideoId(q, retries = 0, markKeyAsExhausted, getNextYouTubeKey, currentKeyIndex, YOUTUBE_API_KEYS) {
+    youtube = getYoutubeClient();
     const queries = [
         q,
         q.replace(/\s*-\s*/, ' '),
@@ -272,7 +275,6 @@ function getFallbackSongs(prompt, numSongs) {
 }
 
 module.exports = {
-  initializeYoutube,
   findYoutubeVideoId,
   generateWithOpenAI,
   getFallbackSongs,
