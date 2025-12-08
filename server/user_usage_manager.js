@@ -1,24 +1,18 @@
-const { createClient } = require('@vercel/kv');
+const Redis = require('ioredis');
 const { findYoutubeVideoId, generateWithOpenAI, getFallbackSongs, uniquePreserveOrder } = require('./api_calls');
 
 const TOKEN_LIMIT = 50;
-const TOKEN_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 horas
+const TOKEN_WINDOW_SECONDS = 24 * 60 * 60; // 24 hours in seconds
 
-const kv = createClient({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
+// Connect to Upstash Redis
+const redis = new Redis(process.env.UPSTASH_REDIS_REST_URL);
 
 async function readUsage(ip) {
-  const userData = await kv.get(ip);
-  if (!userData) {
-    return { count: 0, firstRequest: 0 };
+  const userDataString = await redis.get(ip);
+  if (!userDataString) {
+    return { count: 0 };
   }
-  const now = Date.now();
-  if (now - userData.firstRequest > TOKEN_WINDOW_MS) {
-    return { count: 0, firstRequest: 0 };
-  }
-  return userData;
+  return JSON.parse(userDataString);
 }
 
 async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouTubeKey, currentKeyIndex, YOUTUBE_API_KEYS }) {
@@ -26,15 +20,7 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
   const numSongs = Number(req.body.numSongs) || 10;
 
   try {
-    const now = Date.now();
-    let userData = await kv.get(ip);
-
-    if (!userData || (now - userData.firstRequest > TOKEN_WINDOW_MS)) {
-      userData = {
-        count: 0,
-        firstRequest: now,
-      };
-    }
+    let userData = await readUsage(ip);
 
     if (userData.count + numSongs > TOKEN_LIMIT) {
       const remainingTokens = TOKEN_LIMIT - userData.count;
@@ -123,10 +109,12 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
 
     const playlistUrl = `https://www.youtube.com/watch_videos?video_ids=${videoIds.join(',')}`;
 
-    userData.count += generated.length;
+    const newCount = (userData.count || 0) + generated.length;
+    const newUserData = { count: newCount };
 
-    await kv.set(ip, userData);
-    console.log(`📈 Tokens para ${ip}: ${userData.count}/${TOKEN_LIMIT}`);
+    // Set the new usage data with a 24-hour expiration
+    await redis.setex(ip, TOKEN_WINDOW_SECONDS, JSON.stringify(newUserData));
+    console.log(`📈 Tokens para ${ip}: ${newCount}/${TOKEN_LIMIT}`);
 
     return res.json({
       success: true,
@@ -141,7 +129,7 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
       usedAI,
       message: videoIds.length === numSongs
         ? '¡Playlist generada exitosamente!'
-        : `Playlist creada con ${videoIds.length} de ${numSongs} canciones`
+        : `Playlist creada con ${videoIds.length} de ${numSongs}`
     });
 
   } catch (err) {
@@ -155,7 +143,6 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
 
 module.exports = {
   handlePlaylistRequest,
-  TOKEN_WINDOW_MS,
   readUsage,
   TOKEN_LIMIT,
 };
