@@ -1,18 +1,26 @@
-const Redis = require('ioredis');
+const fs = require('fs').promises;
+const path = require('path');
+const lockfile = require('proper-lockfile');
 const { findYoutubeVideoId, generateWithOpenAI, getFallbackSongs, uniquePreserveOrder } = require('./api_calls');
 
 const TOKEN_LIMIT = 50;
-const TOKEN_WINDOW_SECONDS = 24 * 60 * 60; // 24 hours in seconds
+const TOKEN_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 horas
+const usageDbPath = path.join(__dirname, 'token_usage.json');
 
-// Connect to Upstash Redis
-const redis = new Redis(process.env.UPSTASH_REDIS_REST_URL);
-
-async function readUsage(ip) {
-  const userDataString = await redis.get(ip);
-  if (!userDataString) {
-    return { count: 0 };
+async function readUsage() {
+  try {
+    const data = await fs.readFile(usageDbPath, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return {}; // Si el archivo no existe, empezar con data vacía
+    }
+    throw err;
   }
-  return JSON.parse(userDataString);
+}
+
+async function writeUsage(data) {
+  await fs.writeFile(usageDbPath, JSON.stringify(data, null, 2));
 }
 
 async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouTubeKey, currentKeyIndex, YOUTUBE_API_KEYS }) {
@@ -20,7 +28,29 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
   const numSongs = Number(req.body.numSongs) || 10;
 
   try {
-    let userData = await readUsage(ip);
+    await lockfile.lock(usageDbPath);
+
+    let usage;
+    try {
+      const data = await fs.readFile(usageDbPath, 'utf8');
+      usage = JSON.parse(data);
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        usage = {};
+      } else {
+        throw err;
+      }
+    }
+
+    const now = Date.now();
+    let userData = usage[ip];
+
+    if (!userData || (now - userData.firstRequest > TOKEN_WINDOW_MS)) {
+      userData = {
+        count: 0,
+        firstRequest: now,
+      };
+    }
 
     if (userData.count + numSongs > TOKEN_LIMIT) {
       const remainingTokens = TOKEN_LIMIT - userData.count;
@@ -109,12 +139,11 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
 
     const playlistUrl = `https://www.youtube.com/watch_videos?video_ids=${videoIds.join(',')}`;
 
-    const newCount = (userData.count || 0) + generated.length;
-    const newUserData = { count: newCount };
+    userData.count += generated.length;
+    usage[ip] = userData;
 
-    // Set the new usage data with a 24-hour expiration
-    await redis.setex(ip, TOKEN_WINDOW_SECONDS, JSON.stringify(newUserData));
-    console.log(`📈 Tokens para ${ip}: ${newCount}/${TOKEN_LIMIT}`);
+    await writeUsage(usage);
+    console.log(`📈 Tokens para ${ip}: ${userData.count}/${TOKEN_LIMIT}`);
 
     return res.json({
       success: true,
@@ -129,7 +158,7 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
       usedAI,
       message: videoIds.length === numSongs
         ? '¡Playlist generada exitosamente!'
-        : `Playlist creada con ${videoIds.length} de ${numSongs}`
+        : `Playlist creada con ${videoIds.length} de ${numSongs} canciones`
     });
 
   } catch (err) {
@@ -138,11 +167,42 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
       error: "Error al generar la playlist",
       details: err.message
     });
+  } finally {
+    await lockfile.unlock(usageDbPath);
   }
+}
+
+async function cleanupOldUsageData() {
+  await lockfile.lock(usageDbPath);
+  let usage;
+  try {
+    const data = await fs.readFile(usageDbPath, 'utf8');
+    usage = JSON.parse(data);
+  } catch (err) {
+    await lockfile.unlock(usageDbPath);
+    if (err.code === 'ENOENT') return; // No file to clean
+    throw err;
+  }
+
+  const now = Date.now();
+  let changed = false;
+  for (const ip in usage) {
+    if (now - usage[ip].firstRequest > TOKEN_WINDOW_MS) {
+      delete usage[ip];
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await fs.writeFile(usageDbPath, JSON.stringify(usage, null, 2));
+  }
+  await lockfile.unlock(usageDbPath);
 }
 
 module.exports = {
   handlePlaylistRequest,
+  cleanupOldUsageData,
+  TOKEN_WINDOW_MS,
   readUsage,
   TOKEN_LIMIT,
 };

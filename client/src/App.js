@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-// Use environment variable for the API URL, with a fallback for local development
-const API_URL = process.env.REACT_APP_API_URL || '';
-
 function App() {
   const [prompt, setPrompt] = useState('');
   const [numSongs, setNumSongs] = useState(10);
@@ -14,8 +11,7 @@ function App() {
 
   const fetchUsage = async () => {
     try {
-      // Prepend the API_URL to the request path
-      const response = await fetch(`${API_URL}/api/usage`);
+      const response = await fetch('http://localhost:5000/api/usage');
       if (response.ok) {
         const data = await response.json();
         setUsage(data);
@@ -36,8 +32,7 @@ function App() {
     setPlaylistUrl('');
 
     try {
-      // Prepend the API_URL to the request path
-      const response = await fetch(`${API_URL}/api/playlist`, {
+      const response = await fetch('http://localhost:5000/api/playlist', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
