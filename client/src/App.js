@@ -11,7 +11,7 @@ function App() {
 
   const fetchUsage = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/usage');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/usage`);
       if (response.ok) {
         const data = await response.json();
         setUsage(data);
@@ -32,7 +32,7 @@ function App() {
     setPlaylistUrl('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/playlist', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/playlist`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

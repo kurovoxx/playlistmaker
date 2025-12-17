@@ -3,6 +3,6 @@ import App from './App';
 
 test('renders music playlist generator title', () => {
   render(<App />);
-  const titleElement = screen.getByText(/Music Playlist Generator/i);
+  const titleElement = screen.getByText(/MelodyFlow/i);
   expect(titleElement).toBeInTheDocument();
 });
