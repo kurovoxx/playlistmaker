@@ -32,13 +32,16 @@ function App() {
     setPlaylistUrl('');
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/playlist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt, numSongs }),
-      });
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/playlist`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prompt, numSongs }),
+        }
+      );
 
       if (!response.ok) {
         if (response.status === 429) {
@@ -58,12 +61,25 @@ function App() {
     }
   };
 
+  // 🔹 NUEVO: resetear la app al estado inicial
+  const resetApp = () => {
+    setPrompt('');
+    setNumSongs(10);
+    setPlaylistUrl('');
+    setError('');
+    setLoading(false);
+  };
+
   return (
     <div className="app-wrapper">
       <div className="container">
-        <h1 className='title'> MelodyFlow <p className='beta'>beta</p></h1>
-     
-        <p className="subtitle">Create AI-powered personalized playlists</p>
+        <h1 className="title">
+          MelodyFlow <p className="beta">beta</p>
+        </h1>
+
+        <p className="subtitle">
+          Create AI-powered personalized playlists
+        </p>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -104,7 +120,12 @@ function App() {
         {playlistUrl && (
           <div className="playlist">
             <h2>Your playlist is ready!</h2>
-            <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
+            <a
+              href={playlistUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={resetApp}
+            >
               Open on YouTube
             </a>
           </div>
@@ -113,12 +134,16 @@ function App() {
         <div className="usage-container">
           <p>
             <span>Songs generated</span>
-            <span className="usage-badge">{usage.count} / {usage.limit}</span>
+            <span className="usage-badge">
+              {usage.count} / {usage.limit}
+            </span>
           </p>
           <div className="progress-bar-container">
             <div
               className="progress-bar"
-              style={{ width: `${(usage.count / usage.limit) * 100}%` }}
+              style={{
+                width: `${(usage.count / usage.limit) * 100}%`,
+              }}
             ></div>
           </div>
         </div>
@@ -126,7 +151,8 @@ function App() {
         <div className="footer">
           <p>by • KuroVox</p>
           <p>
-            <a href="#">Privacy Policy</a> • <a href="#">Terms of Service</a>
+            <a href="#">Privacy Policy</a> •{' '}
+            <a href="#">Terms of Service</a>
           </p>
         </div>
       </div>
