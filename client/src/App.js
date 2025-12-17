@@ -74,7 +74,7 @@ function App() {
     <div className="app-wrapper">
       <div className="container">
         <h1 className="title">
-          MelodyFlow <p className="beta">beta</p>
+          MusicBallade <p className="beta">beta</p>
         </h1>
 
         <p className="subtitle">
