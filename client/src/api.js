@@ -23,6 +23,7 @@ export const fetchWithFallback = async (endpoint, options) => {
       fetch(`${PRIMARY_API_URL}${endpoint}`, options),
       timeoutPromise,
     ]);
+    console.log(`[Client] Attempting to fetch from Primary API: ${PRIMARY_API_URL}${endpoint}`);
     if (response.ok) {
       return response;
     }

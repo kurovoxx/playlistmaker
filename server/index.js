@@ -29,7 +29,14 @@ async function main() {
   // Inicializar el cliente por primera vez
   getNextYouTubeKey();
 
-  app.use(cors());
+  const corsOptions = {
+    origin: ['http://localhost:3001', 'https://brachypterous-zonia-unresting.ngrok-free.dev', 'https://playlistmaker-isc7.onrender.com'],
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    credentials: true,
+    optionsSuccessStatus: 204
+  };
+
+  app.use(cors(corsOptions));
   app.use(express.json());
 
   // =========================
