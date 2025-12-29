@@ -28,7 +28,7 @@ function App() {
   };
 
   useEffect(() => {
-    fetchUsage();
+    // Removed fetchUsage() call as per user request.
   }, []);
 
   const handleSubmit = async (event) => {
@@ -57,12 +57,27 @@ function App() {
         throw new Error('An unexpected error occurred.');
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 429) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Song limit exceeded.');
+        }
+        throw new Error('An unexpected error occurred.');
+      }
+
+      const responseText = await response.text();
+      console.log('[Frontend] Raw response from server:', responseText);
+      const data = JSON.parse(responseText);
+      
       setPlaylistUrl(data.playlistUrl);
-      // 🔹 ACTUALIZADO: Usar el nuevo conteo que nos da el servidor
-      // para evitar una race condition.
-      if (data.newUsageCount !== undefined) {
+
+      // Add logging for newUsageCount as requested
+      console.log('[Frontend] Type of newUsageCount:', typeof data.newUsageCount);
+      if (typeof data.newUsageCount === 'number') {
+        console.log('[Frontend] New usage count received from playlist creation:', data.newUsageCount);
         setUsage(prevUsage => ({ ...prevUsage, count: data.newUsageCount }));
+      } else {
+        console.error('[Frontend] Error: newUsageCount is missing or not a number in the playlist creation response.');
       }
     } catch (error) {
       setError(error.message);

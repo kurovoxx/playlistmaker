@@ -110,6 +110,7 @@ ${'='.repeat(60)}`);
     // Atomically increment the usage count in Redis
     const newTotalCount = await storage.incrementUsage(ip, generated.length);
     console.log(`📈 Usage for ${ip}: ${newTotalCount}/${TOKEN_LIMIT}`);
+    console.log(`[Server] About to send response to client...`);
 
     const playlistUrl = `https://www.youtube.com/watch_videos?video_ids=${videoIds.join(',')}`;
 
