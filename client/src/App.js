@@ -13,7 +13,8 @@ function App() {
 
   const fetchUsage = async () => {
     try {
-      const response = await fetchWithFallback('/api/usage');
+      // Add a cache-busting parameter to ensure we always get the latest count
+      const response = await fetchWithFallback(`/api/usage?t=${new Date().getTime()}`);
       if (response.ok) {
         const data = await response.json();
         setUsage(data);
