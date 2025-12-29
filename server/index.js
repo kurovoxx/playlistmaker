@@ -30,7 +30,7 @@ async function main() {
   getNextYouTubeKey();
 
   const corsOptions = {
-    origin: ['http://localhost:3001', 'https://brachypterous-zonia-unresting.ngrok-free.dev', 'https://playlistmaker-isc7.onrender.com'],
+    origin: ['http://localhost:3001', 'https://musicballade.vercel.app', 'https://brachypterous-zonia-unresting.ngrok-free.dev', 'https://playlistmaker-isc7.onrender.com'],
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     credentials: true,
     optionsSuccessStatus: 204
