@@ -71,47 +71,63 @@ async function getUsageCount(ip) {
 }
 
 /**
- * Increments the usage count for a given IP address using an UPSERT operation.
- * If the user's record is expired or doesn't exist, it creates a new one.
+ * Increments the usage count for a given IP address using a read-modify-write
+ * pattern within a transaction to ensure atomicity and correctness.
  * @param {string} ip - The IP address of the user.
  * @param {number} songsToAdd - The number of songs to add to the count.
  * @returns {Promise<number>} The new usage count after incrementing.
  */
 async function incrementUsage(ip, songsToAdd) {
   const db = getClient();
-  const now = Math.floor(Date.now() / 1000);
+  const tx = await db.transaction("write");
 
   try {
-    // This is an "UPSERT" operation.
-    // - It tries to INSERT a new row.
-    // - If a row with the same `ip` already exists (ON CONFLICT), it runs an UPDATE instead.
-    // - The WHERE clause in the UPDATE ensures we only update if the record is recent. 
-    //   If the record is old, the UPDATE does nothing, and the subsequent SELECT will see it as expired.
-    await db.execute({
+    const now = Math.floor(Date.now() / 1000);
+    const twentyFourHoursAgo = now - 86400;
+
+    // 1. Read the existing record within the transaction
+    const rs = await tx.execute({
+      sql: "SELECT song_count, first_request_timestamp FROM usage_stats WHERE ip = ?",
+      args: [ip],
+    });
+
+    let currentCount = 0;
+    let newTimestamp = now;
+
+    // 2. Decide the new values in plain JavaScript
+    if (rs.rows.length > 0) {
+      const record = rs.rows[0];
+      // Check if the record is still within the 24-hour window
+      if (record.first_request_timestamp > twentyFourHoursAgo) {
+        currentCount = record.song_count;
+        newTimestamp = record.first_request_timestamp; // Keep the original start time of the window
+      }
+      // If the record is old, we do nothing, letting currentCount remain 0 and newTimestamp be `now`.
+    }
+
+    const newCount = currentCount + songsToAdd;
+
+    // 3. Execute a simple, clean UPSERT with the calculated values
+    await tx.execute({
       sql: `
         INSERT INTO usage_stats (ip, song_count, first_request_timestamp)
         VALUES (?, ?, ?)
         ON CONFLICT(ip) DO UPDATE SET
-          song_count = CASE
-            -- If the record is older than 24 hours, reset the count.
-            WHEN first_request_timestamp < (? - 86400) THEN ?
-            -- Otherwise, increment the existing count.
-            ELSE song_count + ?
-          END,
-          -- If the record is older than 24 hours, also reset the timestamp.
-          first_request_timestamp = CASE
-            WHEN first_request_timestamp < (? - 86400) THEN ?
-            ELSE first_request_timestamp
-          END;
+          song_count = ?,
+          first_request_timestamp = ?;
       `,
-      args: [ip, songsToAdd, now, now, songsToAdd, songsToAdd, now, now],
+      args: [ip, newCount, newTimestamp, newCount, newTimestamp],
     });
     
-    // After the upsert, we get the definitive current count.
-    return await getUsageCount(ip);
+    await tx.commit();
+    return newCount;
 
   } catch (err) {
-    console.error('Error incrementing usage:', err);
+    console.error('Error in usage increment transaction:', err);
+    // If the transaction is still active, roll it back
+    if (tx && !tx.closed) {
+      await tx.rollback();
+    }
     throw err;
   }
 }
