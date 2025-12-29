@@ -1,26 +1,21 @@
-const fs = require('fs').promises;
-const path = require('path');
-const lockfile = require('proper-lockfile');
+// playlistmaker/server/user_usage_manager.js
+const storage = require('./storage');
 const { findYoutubeVideoId, generateWithOpenAI, getFallbackSongs, uniquePreserveOrder } = require('./api_calls');
 
 const TOKEN_LIMIT = 50;
-const TOKEN_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 horas
-const usageDbPath = path.join(__dirname, 'token_usage.json');
 
-async function readUsage() {
-  try {
-    const data = await fs.readFile(usageDbPath, 'utf8');
-    return JSON.parse(data);
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      return {}; // Si el archivo no existe, empezar con data vacía
-    }
-    throw err;
-  }
-}
-
-async function writeUsage(data) {
-  await fs.writeFile(usageDbPath, JSON.stringify(data, null, 2));
+/**
+ * Gets the current usage for a given IP.
+ * This is called by the GET /api/usage endpoint.
+ * @param {string} ip - The user's IP address.
+ * @returns {Promise<{count: number, limit: number}>}
+ */
+async function getUsage(ip) {
+  const count = await storage.getUsageCount(ip);
+  return {
+    count,
+    limit: TOKEN_LIMIT,
+  };
 }
 
 async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouTubeKey, currentKeyIndex, YOUTUBE_API_KEYS }) {
@@ -28,32 +23,10 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
   const numSongs = Number(req.body.numSongs) || 10;
 
   try {
-    await lockfile.lock(usageDbPath);
+    const currentCount = await storage.getUsageCount(ip);
 
-    let usage;
-    try {
-      const data = await fs.readFile(usageDbPath, 'utf8');
-      usage = JSON.parse(data);
-    } catch (err) {
-      if (err.code === 'ENOENT') {
-        usage = {};
-      } else {
-        throw err;
-      }
-    }
-
-    const now = Date.now();
-    let userData = usage[ip];
-
-    if (!userData || (now - userData.firstRequest > TOKEN_WINDOW_MS)) {
-      userData = {
-        count: 0,
-        firstRequest: now,
-      };
-    }
-
-    if (userData.count + numSongs > TOKEN_LIMIT) {
-      const remainingTokens = TOKEN_LIMIT - userData.count;
+    if (currentCount + numSongs > TOKEN_LIMIT) {
+      const remainingTokens = TOKEN_LIMIT - currentCount;
       return res.status(429).json({
         error: 'Límite de canciones excedido',
         message: `Has alcanzado tu límite de ${TOKEN_LIMIT} canciones en 24 horas.`,
@@ -62,17 +35,16 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
       });
     }
 
-    let { prompt } = req.body;
+    const { prompt } = req.body;
 
     if (!prompt || prompt.trim().length === 0) {
-      return res.status(400).json({
-        error: "Debes proporcionar una descripción de la playlist"
-      });
+      return res.status(400).json({ error: "Debes proporcionar una descripción de la playlist" });
     }
 
     const requestedSongs = numSongs < 1 ? 1 : (numSongs > 30 ? 30 : numSongs);
 
-    console.log(`\n${'='.repeat(60)}`);
+    console.log(`
+${'='.repeat(60)}`);
     console.log(`📝 Nueva solicitud: "${prompt}"`);
     console.log(`🔢 Canciones solicitadas: ${requestedSongs}`);
     console.log(`${'='.repeat(60)}`);
@@ -95,38 +67,36 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
       generated = uniquePreserveOrder(generated).slice(0, requestedSongs);
     }
 
-    console.log(`\n✅ Canciones generadas (${generated.length}):`);
+    console.log(`
+✅ Canciones generadas (${generated.length}):`);
     generated.forEach((song, i) => console.log(`   ${i + 1}. ${song}`));
 
-    console.log(`\n🔍 Buscando videos en YouTube...`);
+    console.log(`
+🔍 Buscando videos en YouTube...`);
 
-    const searchPromises = generated.map(async (song) => {
-      try {
-        const videoId = await findYoutubeVideoId(song, 0, markKeyAsExhausted, getNextYouTubeKey, currentKeyIndex, YOUTUBE_API_KEYS);
-        return {
+    const searchPromises = generated.map((song) => 
+      findYoutubeVideoId(song, 0, markKeyAsExhausted, getNextYouTubeKey, currentKeyIndex, YOUTUBE_API_KEYS)
+        .then(videoId => ({
           title: song,
           videoUrl: videoId ? `https://www.youtube.com/watch?v=${videoId}` : null,
           videoId,
           found: !!videoId,
-        };
-      } catch (err) {
-        console.error(`   ✗ Error: ${song}`);
-        return {
-          title: song,
-          videoUrl: null,
-          videoId: null,
-          found: false,
-        };
-      }
-    });
+        }))
+        .catch(err => {
+          console.error(`   ✗ Error buscando "${song}": ${err.message}`);
+          return { title: song, videoUrl: null, videoId: null, found: false };
+        })
+    );
 
     const items = await Promise.all(searchPromises);
     const videoIds = items.filter(i => i.videoId).map(i => i.videoId);
 
-    console.log(`\n📊 Resultados:`);
+    console.log(`
+📊 Resultados:`);
     console.log(`   Videos encontrados: ${videoIds.length}/${generated.length}`);
     console.log(`   IA utilizada: ${usedAI ? 'OpenAI GPT-3.5' : 'Fallback inteligente'}`);
-    console.log(`${'='.repeat(60)}\n`);
+    console.log(`${'='.repeat(60)}
+`);
 
     if (videoIds.length === 0) {
       return res.status(404).json({
@@ -136,14 +106,12 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
         usedAI
       });
     }
+    
+    // Atomically increment the usage count in Redis
+    const newTotalCount = await storage.incrementUsage(ip, generated.length);
+    console.log(`📈 Usage for ${ip}: ${newTotalCount}/${TOKEN_LIMIT}`);
 
     const playlistUrl = `https://www.youtube.com/watch_videos?video_ids=${videoIds.join(',')}`;
-
-    userData.count += generated.length;
-    usage[ip] = userData;
-
-    await writeUsage(usage);
-    console.log(`📈 Tokens para ${ip}: ${userData.count}/${TOKEN_LIMIT}`);
 
     return res.json({
       success: true,
@@ -167,42 +135,11 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
       error: "Error al generar la playlist",
       details: err.message
     });
-  } finally {
-    await lockfile.unlock(usageDbPath);
   }
-}
-
-async function cleanupOldUsageData() {
-  await lockfile.lock(usageDbPath);
-  let usage;
-  try {
-    const data = await fs.readFile(usageDbPath, 'utf8');
-    usage = JSON.parse(data);
-  } catch (err) {
-    await lockfile.unlock(usageDbPath);
-    if (err.code === 'ENOENT') return; // No file to clean
-    throw err;
-  }
-
-  const now = Date.now();
-  let changed = false;
-  for (const ip in usage) {
-    if (now - usage[ip].firstRequest > TOKEN_WINDOW_MS) {
-      delete usage[ip];
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    await fs.writeFile(usageDbPath, JSON.stringify(usage, null, 2));
-  }
-  await lockfile.unlock(usageDbPath);
 }
 
 module.exports = {
   handlePlaylistRequest,
-  cleanupOldUsageData,
-  TOKEN_WINDOW_MS,
-  readUsage,
+  getUsage, // <-- Changed from readUsage
   TOKEN_LIMIT,
 };
