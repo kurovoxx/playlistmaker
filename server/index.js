@@ -89,6 +89,7 @@ async function main() {
   // Root endpoint
   app.get('/api/usage', async (req, res) => {
     try {
+      console.log(`[GET Request] API received request for usage from IP: ${req.ip}`);
       const usageData = await getUsage(req.ip);
       res.json(usageData);
     } catch (err) {
@@ -96,7 +97,6 @@ async function main() {
       res.status(500).json({ error: 'Could not fetch usage data.' });
     }
   });
-
   app.get('/', (req, res) => {
     res.json({
       message: 'Playlist Maker API',

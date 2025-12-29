@@ -17,7 +17,10 @@ function App() {
       const response = await fetchWithFallback(`/api/usage?t=${new Date().getTime()}`);
       if (response.ok) {
         const data = await response.json();
+        console.log('[Frontend] Received data from server:', data);
         setUsage(data);
+      } else {
+        console.error('[Frontend] Failed to fetch usage data, response not ok.', response);
       }
     } catch (err) {
       console.error('Error fetching usage:', err);

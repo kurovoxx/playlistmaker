@@ -53,6 +53,7 @@ async function setup() {
 async function getUsageCount(ip) {
   const db = getClient();
   const twentyFourHoursAgo = Math.floor(Date.now() / 1000) - 86400;
+  console.log(`[DB Read] Checking usage for IP: ${ip}`);
 
   try {
     const rs = await db.execute({
@@ -61,9 +62,12 @@ async function getUsageCount(ip) {
     });
 
     if (rs.rows.length === 0) {
+      console.log(`[DB Read] No recent record found for IP: ${ip}. Returning 0.`);
       return 0; // No recent usage found for this IP.
     }
-    return rs.rows[0].song_count;
+    const count = rs.rows[0].song_count;
+    console.log(`[DB Read] Found count: ${count} for IP: ${ip}`);
+    return count;
   } catch (err) {
     console.error('Error getting usage count:', err);
     return 0; // Fail safe
