@@ -116,6 +116,7 @@ ${'='.repeat(60)}`);
     return res.json({
       success: true,
       playlistUrl,
+      newUsageCount: newTotalCount,
       items,
       stats: {
         requested: numSongs,
