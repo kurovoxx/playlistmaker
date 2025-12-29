@@ -1,7 +1,8 @@
 // src/api.js
 
-const PRIMARY_API_URL = process.env.REACT_APP_PRIMARY_API_URL;
-const FALLBACK_API_URL = process.env.REACT_APP_FALLBACK_API_URL;
+// Use environment variables or default to an empty string for relative paths
+const PRIMARY_API_URL = process.env.REACT_APP_PRIMARY_API_URL || '';
+const FALLBACK_API_URL = process.env.REACT_APP_FALLBACK_API_URL || '';
 const REQUEST_TIMEOUT = 5000; // 5 seconds
 
 export const fetchWithFallback = async (endpoint, options) => {

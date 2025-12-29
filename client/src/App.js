@@ -59,7 +59,11 @@ function App() {
 
       const data = await response.json();
       setPlaylistUrl(data.playlistUrl);
-      fetchUsage();
+      // 🔹 ACTUALIZADO: Usar el nuevo conteo que nos da el servidor
+      // para evitar una race condition.
+      if (data.newUsageCount !== undefined) {
+        setUsage(prevUsage => ({ ...prevUsage, count: data.newUsageCount }));
+      }
     } catch (error) {
       setError(error.message);
     } finally {
