@@ -5,7 +5,13 @@ const PRIMARY_API_URL = process.env.REACT_APP_PRIMARY_API_URL || '';
 const FALLBACK_API_URL = process.env.REACT_APP_FALLBACK_API_URL || '';
 const REQUEST_TIMEOUT = 20000; // 20 seconds
 
-export const fetchWithFallback = async (endpoint, options) => {
+export const fetchWithFallback = async (endpoint, options = {}) => {
+  // Add the ngrok bypass header to the existing headers
+  options.headers = {
+    ...options.headers,
+    'ngrok-skip-browser-warning': 'true',
+  };
+
   const controller = new AbortController();
   const { signal } = controller;
   options = { ...options, signal };
