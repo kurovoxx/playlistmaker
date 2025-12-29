@@ -91,6 +91,7 @@ async function main() {
     try {
       console.log(`[GET Request] API received request for usage from IP: ${req.ip}`);
       const usageData = await getUsage(req.ip);
+      console.log(`[Server] Sending usage data:`, usageData);
       res.json(usageData);
     } catch (err) {
       console.error('Error fetching usage:', err);

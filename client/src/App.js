@@ -28,7 +28,7 @@ function App() {
   };
 
   useEffect(() => {
-    // Removed fetchUsage() call as per user request.
+    fetchUsage();
   }, []);
 
   const handleSubmit = async (event) => {
@@ -71,14 +71,11 @@ function App() {
       
       setPlaylistUrl(data.playlistUrl);
 
-      // Add logging for newUsageCount as requested
-      console.log('[Frontend] Type of newUsageCount:', typeof data.newUsageCount);
+      // Use the new count from the server's response to avoid a race condition
       if (typeof data.newUsageCount === 'number') {
-        console.log('[Frontend] New usage count received from playlist creation:', data.newUsageCount);
         setUsage(prevUsage => ({ ...prevUsage, count: data.newUsageCount }));
-      } else {
-        console.error('[Frontend] Error: newUsageCount is missing or not a number in the playlist creation response.');
       }
+
     } catch (error) {
       setError(error.message);
     } finally {
