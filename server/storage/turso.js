@@ -80,33 +80,33 @@ async function getUsageCount(ip) {
 async function incrementUsage(ip, songsToAdd) {
   const db = getClient();
   const now = Math.floor(Date.now() / 1000);
+  const twentyFourHoursAgo = now - 86400;
 
   try {
-    // This is an "UPSERT" operation.
-    // - It tries to INSERT a new row.
-    // - If a row with the same `ip` already exists (ON CONFLICT), it runs an UPDATE instead.
-    // - The WHERE clause in the UPDATE ensures we only update if the record is recent. 
-    //   If the record is old, the UPDATE does nothing, and the subsequent SELECT will see it as expired.
+    // This is a more robust "UPSERT" operation using SQLite's `excluded` pseudo-table.
+    // 1. It attempts to INSERT a new row for the IP.
+    // 2. ON CONFLICT (if the IP already exists), it performs an UPDATE.
+    // 3. The UPDATE logic checks if the existing record is older than 24 hours.
+    //    - If old: It resets the count to `songsToAdd` (from `excluded.song_count`)
+    //      and updates the timestamp to `now`.
+    //    - If recent: It increments the existing `song_count`.
     await db.execute({
       sql: `
         INSERT INTO usage_stats (ip, song_count, first_request_timestamp)
         VALUES (?, ?, ?)
         ON CONFLICT(ip) DO UPDATE SET
           song_count = CASE
-            -- If the record is older than 24 hours, reset the count.
-            WHEN first_request_timestamp < (? - 86400) THEN ?
-            -- Otherwise, increment the existing count.
-            ELSE song_count + ?
+            WHEN usage_stats.first_request_timestamp < ? THEN excluded.song_count
+            ELSE usage_stats.song_count + excluded.song_count
           END,
-          -- If the record is older than 24 hours, also reset the timestamp.
           first_request_timestamp = CASE
-            WHEN first_request_timestamp < (? - 86400) THEN ?
-            ELSE first_request_timestamp
+            WHEN usage_stats.first_request_timestamp < ? THEN excluded.first_request_timestamp
+            ELSE usage_stats.first_request_timestamp
           END;
       `,
-      args: [ip, songsToAdd, now, now, songsToAdd, songsToAdd, now, now],
+      args: [ip, songsToAdd, now, twentyFourHoursAgo, twentyFourHoursAgo],
     });
-    
+
     // After the upsert, we get the definitive current count.
     return await getUsageCount(ip);
 
