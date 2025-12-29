@@ -44,7 +44,7 @@ body {
 h1 {
   font-size: 32px;
   font-weight: 700;
-  background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+  background: linear-gradient(135deg, #5cb8f6 0%, #ff6b36 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -80,7 +80,7 @@ label::before {
   content: '';
   width: 4px;
   height: 16px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+  background: linear-gradient(135deg, #5cb8f6 0%, #ff6b36 100%);
   border-radius: 2px;
 }
 
@@ -157,7 +157,7 @@ input[type="number"]::-webkit-outer-spin-button {
 button {
   width: 100%;
   padding: 16px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+  background: linear-gradient(135deg, #5cb8f6 0%, #ff6b36 100%);
   color: white;
   border: none;
   border-radius: 12px;
@@ -275,7 +275,7 @@ button:hover::before {
 }
 
 .usage-badge {
-  background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+  background: linear-gradient(135deg, #5cb8f6 0%, #ff6b36 100%);
   color: white;
   padding: 4px 12px;
   border-radius: 20px;
@@ -292,7 +292,7 @@ button:hover::before {
 }
 
 .progress-bar {
-  background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%);
+  background: linear-gradient(90deg, #5cb8f6 0%, #ff6b36 100%);
   height: 100%;
   border-radius: 10px;
   transition: width 0.5s ease;

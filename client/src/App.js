@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Analytics } from '@vercel/analytics/react';
+import { fetchWithFallback } from './api';
 import './App.css';
 
 function App() {
@@ -12,7 +13,7 @@ function App() {
 
   const fetchUsage = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/usage`);
+      const response = await fetchWithFallback('/api/usage');
       if (response.ok) {
         const data = await response.json();
         setUsage(data);
@@ -33,8 +34,8 @@ function App() {
     setPlaylistUrl('');
 
     try {
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/playlist`,
+      const response = await fetchWithFallback(
+        '/api/playlist',
         {
           method: 'POST',
           headers: {
@@ -151,6 +152,7 @@ function App() {
 
         <div className="footer">
           <p>by • KuroVox</p>
+          <p>complains & recomendations to • <a href='#'>musicballade.official@gmail.com</a></p>
           <p>
             <a href="#">Privacy Policy</a> •{' '}
             <a href="#">Terms of Service</a>
