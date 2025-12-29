@@ -20,6 +20,13 @@ async function main() {
 
   app.set('trust proxy', 1); // Confiar en el proxy para obtener la IP correcta
 
+  // Temporary middleware to log all incoming headers for debugging
+  app.use((req, res, next) => {
+    console.log(`[Request Logger] Method: ${req.method}, URL: ${req.originalUrl}`);
+    console.log('[Request Logger] Headers:', JSON.stringify(req.headers, null, 2));
+    next();
+  });
+
   // Validar que las API keys estén configuradas
   if (!process.env.OPENAI_API_KEY) {
     console.error('❌ ERROR: OPENAI_API_KEY no está configurada en .env');
