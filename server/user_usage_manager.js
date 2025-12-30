@@ -11,9 +11,9 @@ const TOKEN_LIMIT = 50;
  * @returns {Promise<{count: number, limit: number}>}
  */
 async function getUsage(ip) {
-  const count = await storage.getUsageCount(ip);
+  const usageRecord = await storage.getUsageCount(ip);
   return {
-    count,
+    count: usageRecord.song_count,
     limit: TOKEN_LIMIT,
   };
 }
