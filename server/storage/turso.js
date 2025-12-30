@@ -57,20 +57,20 @@ async function getUsageCount(ip) {
 
   try {
     const rs = await db.execute({
-      sql: "SELECT song_count FROM usage_stats WHERE ip = ? AND first_request_timestamp > ?",
+      sql: "SELECT song_count, first_request_timestamp FROM usage_stats WHERE ip = ? AND first_request_timestamp > ?",
       args: [ip, twentyFourHoursAgo],
     });
 
     if (rs.rows.length === 0) {
-      console.log(`[DB Read] No recent record found for IP: ${ip}. Returning 0.`);
-      return 0; // No recent usage found for this IP.
+      console.log(`[DB Read] No recent record found for IP: ${ip}.`);
+      return { song_count: 0, first_request_timestamp: null };
     }
-    const count = rs.rows[0].song_count;
-    console.log(`[DB Read] Found count: ${count} for IP: ${ip}`);
-    return count;
+    const record = rs.rows[0];
+    console.log(`[DB Read] Found record:`, record);
+    return { song_count: record.song_count, first_request_timestamp: record.first_request_timestamp };
   } catch (err) {
     console.error('Error getting usage count:', err);
-    return 0; // Fail safe
+    return { song_count: 0, first_request_timestamp: null }; // Fail safe
   }
 }
 

@@ -23,15 +23,19 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
   const numSongs = Number(req.body.numSongs) || 10;
 
   try {
-    const currentCount = await storage.getUsageCount(ip);
+    const usageRecord = await storage.getUsageCount(ip);
+    const currentCount = usageRecord.song_count;
 
     if (currentCount + numSongs > TOKEN_LIMIT) {
       const remainingTokens = TOKEN_LIMIT - currentCount;
+      const resetsAt = usageRecord.first_request_timestamp ? (usageRecord.first_request_timestamp + 86400) * 1000 : Date.now(); // Convert to MS for client
+
       return res.status(429).json({
-        error: 'Límite de canciones excedido',
-        message: `Has alcanzado tu límite de ${TOKEN_LIMIT} canciones en 24 horas.`,
+        code: 'LIMIT_REACHED',
+        message: `You have exceeded your daily song request limit of ${TOKEN_LIMIT} songs.`,
         limit: TOKEN_LIMIT,
         remaining: remainingTokens < 0 ? 0 : remainingTokens,
+        resetsAt: new Date(resetsAt).toISOString(),
       });
     }
 

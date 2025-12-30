@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import { fetchWithFallback } from './api';
+import LimitModal from './components/LimitModal';
 import './App.css';
 
 function App() {
@@ -10,15 +11,21 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [usage, setUsage] = useState({ count: 0, limit: 50 });
+  const [limitError, setLimitError] = useState(null); // { message, resetsAt }
 
   const fetchUsage = async () => {
     try {
       // Add a cache-busting parameter to ensure we always get the latest count
       const response = await fetchWithFallback(`/api/usage?t=${new Date().getTime()}`);
       if (response.ok) {
-        const data = await response.json();
-        console.log('[Frontend] Received data from server:', data);
-        setUsage(data);
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.indexOf('application/json') !== -1) {
+          const data = await response.json();
+          setUsage(data);
+        } else {
+          const text = await response.text();
+          console.error('[Frontend] Error fetching usage: Expected JSON, but received HTML or another format. This often happens if the server is down or a cached error page is being served. Response starts with:', text.substring(0, 200) + '...');
+        }
       } else {
         console.error('[Frontend] Failed to fetch usage data, response not ok.', response);
       }
@@ -52,30 +59,24 @@ function App() {
       if (!response.ok) {
         if (response.status === 429) {
           const errorData = await response.json();
-          throw new Error(errorData.message || 'Song limit exceeded.');
+          if (errorData.code === 'LIMIT_REACHED') {
+            setLimitError({ resetsAt: errorData.resetsAt });
+          } else {
+            throw new Error(errorData.message || 'Song limit exceeded.');
+          }
+        } else {
+           throw new Error('An unexpected error occurred.');
         }
-        throw new Error('An unexpected error occurred.');
+        // Since response is not ok, we should stop here.
+        return;
       }
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Song limit exceeded.');
-        }
-        throw new Error('An unexpected error occurred.');
-      }
-
-      const responseText = await response.text();
-      console.log('[Frontend] Raw response from server:', responseText);
-      const data = JSON.parse(responseText);
-      
+      const data = await response.json();
       setPlaylistUrl(data.playlistUrl);
-
       // Use the new count from the server's response to avoid a race condition
       if (typeof data.newUsageCount === 'number') {
         setUsage(prevUsage => ({ ...prevUsage, count: data.newUsageCount }));
       }
-
     } catch (error) {
       setError(error.message);
     } finally {
@@ -94,11 +95,16 @@ function App() {
 
   return (
     <div className="app-wrapper">
+      <LimitModal 
+        isOpen={!!limitError}
+        resetsAt={limitError?.resetsAt}
+        onClose={() => setLimitError(null)}
+      />
       <div className="container">
         <h1 className="title">
           MusicBallade <p className="beta">beta</p>
         </h1>
-
+        
         <p className="subtitle">
           Create AI-powered personalized playlists
         </p>
