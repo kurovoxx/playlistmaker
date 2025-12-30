@@ -111,8 +111,32 @@ ${'='.repeat(60)}`);
       });
     }
     
-    // Atomically increment the usage count in Redis
-    const newTotalCount = await storage.incrementUsage(ip, generated.length);
+    // Atomically increment the usage count.
+    // This is wrapped in a try-catch to handle race conditions where the usage
+    // might have been incremented by another request after the initial check.
+    let newTotalCount;
+    try {
+      newTotalCount = await storage.incrementUsage(ip, generated.length);
+    } catch (dbError) {
+      // If incrementing usage fails, we assume it's because the limit was hit.
+      // This is a safeguard against race conditions.
+      console.error(`[DB Write Failure] Failed to increment usage for IP ${ip}. Assuming limit reached. Error:`, dbError);
+      
+      // We need to fetch the latest timestamp to provide an accurate reset time.
+      const usageRecord = await storage.getUsageCount(ip);
+      const resetsAt = usageRecord.first_request_timestamp 
+        ? (usageRecord.first_request_timestamp + 86400) * 1000 
+        : Date.now();
+
+      return res.status(429).json({
+        code: 'LIMIT_REACHED_ON_INCREMENT',
+        message: 'Your request could not be completed as it would exceed your usage limit.',
+        limit: TOKEN_LIMIT,
+        remaining: 0, // We assume none are left.
+        resetsAt: new Date(resetsAt).toISOString(),
+      });
+    }
+    
     console.log(`📈 Usage for ${ip}: ${newTotalCount}/${TOKEN_LIMIT}`);
     console.log(`[Server] About to send response to client...`);
 
