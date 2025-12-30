@@ -11,9 +11,9 @@ const TOKEN_LIMIT = 50;
  * @returns {Promise<{count: number, limit: number}>}
  */
 async function getUsage(ip) {
-  const count = await storage.getUsageCount(ip);
+  const usageRecord = await storage.getUsageCount(ip);
   return {
-    count,
+    count: usageRecord.song_count,
     limit: TOKEN_LIMIT,
   };
 }
@@ -23,15 +23,19 @@ async function handlePlaylistRequest(req, res, { markKeyAsExhausted, getNextYouT
   const numSongs = Number(req.body.numSongs) || 10;
 
   try {
-    const currentCount = await storage.getUsageCount(ip);
+    const usageRecord = await storage.getUsageCount(ip);
+    const currentCount = usageRecord.song_count;
 
     if (currentCount + numSongs > TOKEN_LIMIT) {
       const remainingTokens = TOKEN_LIMIT - currentCount;
+      const resetsAt = usageRecord.first_request_timestamp ? (usageRecord.first_request_timestamp + 86400) * 1000 : Date.now(); // Convert to MS for client
+
       return res.status(429).json({
-        error: 'Límite de canciones excedido',
-        message: `Has alcanzado tu límite de ${TOKEN_LIMIT} canciones en 24 horas.`,
+        code: 'LIMIT_REACHED',
+        message: `You have exceeded your daily song request limit of ${TOKEN_LIMIT} songs.`,
         limit: TOKEN_LIMIT,
         remaining: remainingTokens < 0 ? 0 : remainingTokens,
+        resetsAt: new Date(resetsAt).toISOString(),
       });
     }
 
@@ -107,8 +111,32 @@ ${'='.repeat(60)}`);
       });
     }
     
-    // Atomically increment the usage count in Redis
-    const newTotalCount = await storage.incrementUsage(ip, generated.length);
+    // Atomically increment the usage count.
+    // This is wrapped in a try-catch to handle race conditions where the usage
+    // might have been incremented by another request after the initial check.
+    let newTotalCount;
+    try {
+      newTotalCount = await storage.incrementUsage(ip, generated.length);
+    } catch (dbError) {
+      // If incrementing usage fails, we assume it's because the limit was hit.
+      // This is a safeguard against race conditions.
+      console.error(`[DB Write Failure] Failed to increment usage for IP ${ip}. Assuming limit reached. Error:`, dbError);
+      
+      // We need to fetch the latest timestamp to provide an accurate reset time.
+      const usageRecord = await storage.getUsageCount(ip);
+      const resetsAt = usageRecord.first_request_timestamp 
+        ? (usageRecord.first_request_timestamp + 86400) * 1000 
+        : Date.now();
+
+      return res.status(429).json({
+        code: 'LIMIT_REACHED_ON_INCREMENT',
+        message: 'Your request could not be completed as it would exceed your usage limit.',
+        limit: TOKEN_LIMIT,
+        remaining: 0, // We assume none are left.
+        resetsAt: new Date(resetsAt).toISOString(),
+      });
+    }
+    
     console.log(`📈 Usage for ${ip}: ${newTotalCount}/${TOKEN_LIMIT}`);
     console.log(`[Server] About to send response to client...`);
 

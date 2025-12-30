@@ -1,0 +1,131 @@
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+  padding: 20px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 24px;
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  position: relative;
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: #334155;
+  border: none;
+  color: #94a3b8;
+  font-size: 28px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  line-height: 1;
+  padding: 0;
+}
+
+.modal-close:hover {
+  background: #475569;
+  color: #e2e8f0;
+  transform: rotate(90deg);
+}
+
+.modal-content h2 {
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #5cb8f6 0%, #ff6b36 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.modal-content p {
+  color: #cbd5e1;
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.countdown {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+  margin-top: 24px;
+}
+
+.countdown strong {
+  display: block;
+  font-size: 32px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #5cb8f6 0%, #ff6b36 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-top: 12px;
+  letter-spacing: 2px;
+  font-family: 'Courier New', monospace;
+}
+
+@media (max-width: 640px) {
+  .modal-content {
+    padding: 30px 24px;
+  }
+
+  .modal-content h2 {
+    font-size: 24px;
+  }
+
+  .countdown strong {
+    font-size: 28px;
+  }
+}

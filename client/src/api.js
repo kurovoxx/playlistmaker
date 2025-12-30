@@ -29,10 +29,12 @@ export const fetchWithFallback = async (endpoint, options = {}) => {
       fetch(`${PRIMARY_API_URL}${endpoint}`, options),
       timeoutPromise,
     ]);
-    console.log(`[Client] Attempting to fetch from Primary API: ${PRIMARY_API_URL}${endpoint}`);
-    if (response.ok) {
+    // If the response is ok OR it's a 429 error, return it immediately.
+    // The application needs to handle the 429 status specifically.
+    if (response.ok || response.status === 429) {
       return response;
     }
+    console.warn(`Primary API responded with status: ${response.status}`);
   } catch (error) {
     console.warn('Primary API failed, trying fallback:', error);
   }
