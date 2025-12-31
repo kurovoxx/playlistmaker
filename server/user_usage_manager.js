@@ -1,6 +1,6 @@
 // playlistmaker/server/user_usage_manager.js
 const storage = require('./storage');
-const { findYoutubeVideoId, generateWithOpenAI, getFallbackSongs, uniquePreserveOrder } = require('./api_calls');
+const { findVideoId, generateWithOpenAI, getFallbackSongs, uniquePreserveOrder } = require('./api_calls');
 
 const TOKEN_LIMIT = 50;
 
@@ -75,11 +75,13 @@ ${'='.repeat(60)}`);
 ✅ Canciones generadas (${generated.length}):`);
     generated.forEach((song, i) => console.log(`   ${i + 1}. ${song}`));
 
+    const youtubeApiParams = { markKeyAsExhausted, getNextYouTubeKey, currentKeyIndex, YOUTUBE_API_KEYS };
+
     console.log(`
-🔍 Buscando videos en YouTube...`);
+🔍 Buscando videos...`);
 
     const searchPromises = generated.map((song) => 
-      findYoutubeVideoId(song, 0, markKeyAsExhausted, getNextYouTubeKey, currentKeyIndex, YOUTUBE_API_KEYS)
+      findVideoId(song, youtubeApiParams)
         .then(videoId => ({
           title: song,
           videoUrl: videoId ? `https://www.youtube.com/watch?v=${videoId}` : null,

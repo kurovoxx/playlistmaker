@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const OpenAI = require('openai');
+const { findInvidiousVideoId } = require('./invidious_api');
 
 // OpenAI API
 const openai = new OpenAI({
@@ -10,6 +11,24 @@ const { getYoutubeClient, initializeYoutube } = require('./youtube_token_manager
 
 // YouTube API
 let youtube;
+
+// Hybrid search function
+async function findVideoId(q, youtubeApiParams) {
+  try {
+    console.log(`🔎 Buscando en Invidious: "${q}"`);
+    const invidiousVideoId = await findInvidiousVideoId(q, 3000); // 3-second timeout
+    if (invidiousVideoId) {
+      console.log(`   ✓ Encontrado en Invidious: videoId=${invidiousVideoId}`);
+      return invidiousVideoId;
+    }
+  } catch (error) {
+    console.warn(`   ⚠️ Invidious falló: ${error.message}. Usando YouTube como fallback.`);
+  }
+
+  // Fallback to YouTube API
+  console.log(`↪️ Buscando en YouTube: "${q}"`);
+  return findYoutubeVideoId(q, 0, youtubeApiParams.markKeyAsExhausted, youtubeApiParams.getNextYouTubeKey, youtubeApiParams.currentKeyIndex, youtubeApiParams.YOUTUBE_API_KEYS);
+}
 
 // Parsear canciones del texto generado
 function parseSongLines(text) {
@@ -275,7 +294,7 @@ function getFallbackSongs(prompt, numSongs) {
 }
 
 module.exports = {
-  findYoutubeVideoId,
+  findVideoId,
   generateWithOpenAI,
   getFallbackSongs,
   parseSongLines,
