@@ -1,11 +1,11 @@
 const https = require('https');
 
 const INSTANCES = [
+  'https://iv.melmac.space',
   'https://inv.projectsegfau.lt',
   'https://vid.puffyan.us',
   'https://invidious.nerdvpn.de',
   'https://invidious.privacydev.net',
-  'https://iv.melmac.space'
 ];
 
 /**
